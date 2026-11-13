@@ -34,6 +34,7 @@ const state = {
   phase: 'lobby', // 'lobby' | 'playing'
   round: 0,
   adminId: null,
+  prompt: '', // the round's topic, written by the host
   players: new Map(), // id -> { id, name, color, number, joinedAt }
 };
 const streams = new Map(); // id -> Set<res>
@@ -82,6 +83,7 @@ function viewFor(id) {
     round: state.round,
     addresses: lanAddresses().map((ip) => `http://${ip}:${PORT}`),
     palette: PALETTE,
+    prompt: state.prompt,
     you: me && {
       id: me.id,
       name: me.name,
@@ -129,7 +131,8 @@ function readBody(req) {
 }
 
 const cleanName = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 20);
-const cleanId = (s) => String(s || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+const cleanPrompt = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+const cleanId =(s) => String(s || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -190,9 +193,14 @@ const server = http.createServer(async (req, res) => {
         state.players.delete(id);
         ensureAdmin();
         break;
+      case 'prompt':
+        if (!isAdmin) return json(res, 403, { error: 'Host only' });
+        state.prompt = cleanPrompt(body.prompt);
+        break;
       case 'start':
       case 'next':
         if (!isAdmin) return json(res, 403, { error: 'Host only' });
+        if (typeof body.prompt === 'string') state.prompt = cleanPrompt(body.prompt);
         deal();
         break;
       case 'lobby':
