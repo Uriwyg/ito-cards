@@ -81,6 +81,7 @@ function viewFor(id) {
     phase: state.phase,
     round: state.round,
     addresses: lanAddresses().map((ip) => `http://${ip}:${PORT}`),
+    palette: PALETTE,
     you: me && {
       id: me.id,
       name: me.name,
@@ -173,6 +174,16 @@ const server = http.createServer(async (req, res) => {
         if (existing) existing.name = name;
         else state.players.set(id, { id, name, color: pickColor(), number: null, joinedAt: Date.now() });
         ensureAdmin();
+        break;
+      }
+      case 'color': {
+        const me = state.players.get(id);
+        const color = PALETTE.find((c) => c.hex === body.hex);
+        if (!me || !color) return json(res, 400, { error: 'Unknown color' });
+        if (state.phase !== 'lobby') return json(res, 409, { error: 'Colors can only be changed in the lobby' });
+        const taken = [...state.players.values()].some((p) => p.id !== id && p.color.hex === color.hex);
+        if (taken) return json(res, 409, { error: 'That color was just taken' });
+        me.color = color;
         break;
       }
       case 'leave':
