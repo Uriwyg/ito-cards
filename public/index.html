@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#14151a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>ITO Cards</title>
+<style>
+  :root {
+    --bg: #14151a;
+    --panel: #1f2129;
+    --line: #2e313c;
+    --text: #f2f2f5;
+    --muted: #9a9cab;
+    --accent: #ffcc33;
+    --danger: #ff6b6b;
+    --card-front: #fbf8f1;
+    --card-ink: #1b1b1f;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { touch-action: manipulation; overscroll-behavior: none; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 14px; }
+  .hidden { display: none !important; }
+
+  /* ---------- join + lobby ---------- */
+  .screen { min-height: 100%; padding: max(24px, env(safe-area-inset-top)) 16px 32px; max-width: 480px; margin: 0 auto; }
+  h1 { font-size: 44px; letter-spacing: 0.08em; margin: 24px 0 4px; text-align: center; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); text-align: center; margin: 0 0 28px; }
+  .field { width: 100%; padding: 16px; font-size: 20px; border-radius: 14px; border: 2px solid var(--line);
+    background: var(--panel); color: var(--text); outline: none; }
+  .field:focus { border-color: var(--accent); }
+  .btn { width: 100%; padding: 16px; font-size: 18px; font-weight: 700; margin-top: 12px; }
+  .btn.primary { background: var(--accent); color: #1b1b1f; }
+  .btn.primary:disabled { opacity: 0.4; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 2px solid var(--line); }
+  .err { color: var(--danger); min-height: 1.4em; margin-top: 8px; text-align: center; }
+
+  .me { display: flex; align-items: center; gap: 12px; background: var(--panel); border-radius: 16px; padding: 14px 16px; margin-bottom: 20px; }
+  .me .swatch { width: 40px; height: 40px; border-radius: 10px; flex: none; box-shadow: inset 0 0 0 2px rgba(255,255,255,.15); }
+  .me .who { flex: 1; min-width: 0; }
+  .me .who b { display: block; font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .me .who small { color: var(--muted); }
+  .linkbtn { background: none; color: var(--muted); text-decoration: underline; padding: 6px; }
+
+  .section-title { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px;
+    text-transform: uppercase; letter-spacing: .08em; margin: 0 4px 8px; }
+  .players { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .players li { display: flex; align-items: center; gap: 12px; background: var(--panel); border-radius: 12px; padding: 10px 12px; }
+  .players .dot { width: 22px; height: 22px; border-radius: 6px; flex: none; box-shadow: inset 0 0 0 2px rgba(255,255,255,.15); }
+  .players .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .players .tag { font-size: 12px; color: #1b1b1f; background: var(--accent); border-radius: 6px; padding: 2px 6px; font-weight: 700; }
+  .players .off { font-size: 12px; color: var(--muted); }
+  .players .x { background: none; color: var(--muted); font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px; }
+  .wait { text-align: center; color: var(--muted); margin: 28px 0 8px; }
+  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 50% { opacity: .2; } }
+
+  .invite { margin-top: 28px; background: var(--panel); border-radius: 16px; padding: 16px; text-align: center; }
+  .invite p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+  #qr { display: inline-block; background: #fff; padding: 10px; border-radius: 10px; }
+  #qr:empty { display: none; }
+  .addr { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; margin-top: 10px; word-break: break-all; }
+
+  /* ---------- the card ---------- */
+  #game { position: fixed; inset: 0; background: #0b0b0e; padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom)); }
+  .stage { position: relative; z-index: 0; isolation: isolate; width: 100%; height: 100%; perspective: 1400px; }
+  .card { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .55s cubic-bezier(.3,.7,.3,1); cursor: pointer; user-select: none; -webkit-user-select: none; }
+  .card.flipped { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; border-radius: 26px; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+  .front { background: var(--card-front); color: var(--card-ink); box-shadow: inset 0 0 0 10px #fff, inset 0 0 0 12px #e3dccb; }
+  .front .num { font-size: min(52vw, 38vh); font-weight: 900; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+  .front .corner { position: absolute; font-weight: 800; font-size: 26px; }
+  .front .tl { top: 26px; left: 28px; } .front .br { bottom: 26px; right: 28px; transform: rotate(180deg); }
+  .front .scale { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); width: 60%; height: 6px; border-radius: 3px; background: #e6e0d2; }
+  .front .scale i { position: absolute; top: -5px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--card-ink); }
+  .back { transform: rotateY(180deg); }
+  .back .cname { font-size: 28px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; opacity: .55; }
+  .back .pname { position: absolute; bottom: 30px; font-size: 18px; opacity: .55; }
+  .hint { order: 2; margin-top: 18px; text-align: center; font-size: 14px; opacity: .5; pointer-events: none; }
+  .front .hint { color: var(--card-ink); }
+  .round-tag { position: absolute; top: 26px; right: 28px; font-size: 13px; font-weight: 700; opacity: .45; color: var(--card-ink); }
+
+  .spectate { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; color: var(--muted); }
+  .spectate b { color: var(--text); font-size: 22px; display: block; margin-bottom: 8px; }
+
+  .gear { position: absolute; z-index: 5; bottom: max(26px, calc(env(safe-area-inset-bottom) + 12px)); left: 28px; width: 44px; height: 44px;
+    border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 10; display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { width: 100%; max-width: 480px; background: var(--panel); border-radius: 22px 22px 0 0; padding: 20px 16px max(20px, env(safe-area-inset-bottom)); max-height: 85vh; overflow: auto; }
+  .sheet h3 { margin: 0 0 4px; }
+  .sheet .sub { text-align: left; margin-bottom: 12px; }
+
+  .flash { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; pointer-events: none;
+    font-size: 40px; font-weight: 900; color: #fff; background: rgba(0,0,0,.7); animation: flash 1.3s forwards; }
+  @keyframes flash { 0%,60% { opacity: 1; } 100% { opacity: 0; } }
+
+  .conn { position: fixed; top: 0; left: 0; right: 0; z-index: 30; background: var(--danger); color: #fff; text-align: center; font-size: 13px; padding: 4px; }
+</style>
+</head>
+<body>
+
+<div id="conn" class="conn hidden">Reconnecting…</div>
+
+<!-- Join -->
+<section id="join" class="screen hidden">
+  <h1>I<span>T</span>O</h1>
+  <p class="sub">Your phone is your card</p>
+  <form id="joinForm" autocomplete="off">
+    <input id="nameInput" class="field" maxlength="20" placeholder="Your name" enterkeyhint="go">
+    <button class="btn primary" id="joinBtn" type="submit">Join the table</button>
+    <div class="err" id="joinErr"></div>
+  </form>
+</section>
+
+<!-- Lobby -->
+<section id="lobby" class="screen hidden">
+  <h1>I<span>T</span>O</h1>
+  <p class="sub" id="lobbySub">Lobby</p>
+
+  <div class="me">
+    <div class="swatch" id="meSwatch"></div>
+    <div class="who"><b id="meName"></b><small id="meColor"></small></div>
+    <button class="linkbtn" id="leaveBtn">Leave</button>
+  </div>
+
+  <div class="section-title"><span>Players</span><span id="count"></span></div>
+  <ul class="players" id="playerList"></ul>
+
+  <div id="hostControls" class="hidden">
+    <button class="btn primary" id="startBtn">Start round</button>
+  </div>
+  <p class="wait" id="waitMsg"><span class="pulse"></span>Waiting for the host to start…</p>
+
+  <div class="invite">
+    <p>Others join by scanning or opening:</p>
+    <div id="qr"></div>
+    <div class="addr" id="addr"></div>
+  </div>
+</section>
+
+<!-- Game -->
+<section id="game" class="hidden">
+  <div class="stage" id="stage">
+    <div class="card" id="card">
+      <div class="face front">
+        <div class="round-tag" id="roundTag"></div>
+        <div class="hint" id="hintFront">Tap to hide behind your color</div>
+        <div class="num" id="num">–</div>
+        <div class="scale"><i id="scaleDot"></i></div>
+      </div>
+      <div class="face back" id="back">
+        <div class="hint">Tap to reveal</div>
+        <div class="cname" id="cname"></div>
+        <div class="pname" id="pname"></div>
+      </div>
+    </div>
+  </div>
+  <div class="spectate hidden" id="spectate">
+    <div><b>Round in progress</b>You joined mid-round. You'll get a card when the host deals the next round.</div>
+  </div>
+  <button class="gear hidden" id="gear" aria-label="Host controls">⚙</button>
+</section>
+
+<!-- Host sheet -->
+<div class="sheet-bg hidden" id="sheetBg">
+  <div class="sheet">
+    <h3>Host controls</h3>
+    <p class="sub" id="sheetSub"></p>
+    <button class="btn primary" id="nextBtn">Next round (deal new numbers)</button>
+    <button class="btn ghost" id="lobbyBtn">Back to lobby</button>
+    <div class="section-title" style="margin-top:20px"><span>Players</span><span id="count2"></span></div>
+    <ul class="players" id="playerList2"></ul>
+    <button class="btn ghost" id="closeSheet">Close</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  // Persistent player id so a phone that sleeps or reloads keeps its seat and number.
+  let pid;
+  try { pid = localStorage.getItem('ito_pid'); } catch {}
+  if (!pid) {
+    pid = 'p' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { localStorage.setItem('ito_pid', pid); } catch {}
+  }
+
+  let state = null;
+  let es = null;
+  let lastRound = null;
+  let flipped = false;
+  let qrFor = null;
+  let joining = false;
+
+  const api = (action, body = {}) =>
+    fetch('/api/' + action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pid, ...body }),
+    }).then((r) => r.json().then((j) => (r.ok ? j : Promise.reject(j))));
+
+  function connect() {
+    if (es) es.close();
+    es = new EventSource('/events?pid=' + encodeURIComponent(pid));
+    es.onmessage = (e) => { $('conn').classList.add('hidden'); state = JSON.parse(e.data); render(); };
+    es.onerror = () => $('conn').classList.remove('hidden');
+  }
+  connect();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      if (!es || es.readyState === 2) connect();
+      requestWake();
+    }
+  });
+
+  // Keep the screen on while it's a card (works on HTTPS / localhost only; ignored otherwise).
+  let wake = null;
+  async function requestWake() {
+    try { if ('wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => (wake = null)); } } catch {}
+  }
+
+  function isLight(hex) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return false;
+    const n = parseInt(m[1], 16);
+    const r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    return 0.299 * r + 0.587 * g + 0.114 * b > 170;
+  }
+
+  function show(id) {
+    for (const s of ['join', 'lobby', 'game']) $(s).classList.toggle('hidden', s !== id);
+  }
+
+  function renderPlayers(ul, me) {
+    ul.textContent = '';
+    for (const p of state.players) {
+      const li = document.createElement('li');
+      const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = p.color.hex;
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name + (p.id === me.id ? ' (you)' : '');
+      li.append(dot, nm);
+      if (p.isAdmin) { const t = document.createElement('span'); t.className = 'tag'; t.textContent = 'HOST'; li.append(t); }
+      if (!p.online) { const o = document.createElement('span'); o.className = 'off'; o.textContent = 'offline'; li.append(o); }
+      if (state.phase === 'playing' && !p.inRound) { const o = document.createElement('span'); o.className = 'off'; o.textContent = 'next round'; li.append(o); }
+      if (me.isAdmin && p.id !== me.id) {
+        const host = document.createElement('button'); host.className = 'x'; host.textContent = 'Make host';
+        host.onclick = () => { if (confirm(`Make ${p.name} the host?`)) api('makeHost', { target: p.id }); };
+        const x = document.createElement('button'); x.className = 'x'; x.textContent = 'Remove';
+        x.onclick = () => { if (confirm(`Remove ${p.name}?`)) api('kick', { target: p.id }); };
+        li.append(host, x);
+      }
+      ul.append(li);
+    }
+  }
+
+  function render() {
+    const me = state.you;
+    if (!me) {
+      show('join');
+      $('sheetBg').classList.add('hidden');
+      if (!joining) {
+        let saved = ''; try { saved = localStorage.getItem('ito_name') || ''; } catch {}
+        if (!$('nameInput').value) $('nameInput').value = saved;
+      }
+      return;
+    }
+
+    const count = `${state.players.length} at the table`;
+
+    if (state.phase === 'lobby') {
+      show('lobby');
+      $('sheetBg').classList.add('hidden');
+      lastRound = null;
+      $('meSwatch').style.background = me.color.hex;
+      $('meName').textContent = me.name;
+      $('meColor').textContent = `Your color: ${me.color.name}` + (me.isAdmin ? ' · You are the host' : '');
+      $('lobbySub').textContent = state.round ? `Lobby · ${state.round} round${state.round > 1 ? 's' : ''} played` : 'Lobby';
+      $('count').textContent = count;
+      renderPlayers($('playerList'), me);
+      $('hostControls').classList.toggle('hidden', !me.isAdmin);
+      $('waitMsg').classList.toggle('hidden', me.isAdmin);
+      $('startBtn').disabled = state.players.length < 1;
+
+      const url = (state.addresses && state.addresses[0]) || location.origin;
+      const joinUrl = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? url : location.origin;
+      $('addr').textContent = joinUrl;
+      if (qrFor !== joinUrl && window.QRCode) {
+        $('qr').textContent = '';
+        new QRCode($('qr'), { text: joinUrl, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+        qrFor = joinUrl;
+      }
+      return;
+    }
+
+    // playing
+    show('game');
+    const inRound = me.number != null;
+    $('stage').classList.toggle('hidden', !inRound);
+    $('spectate').classList.toggle('hidden', inRound);
+    $('gear').classList.toggle('hidden', !me.isAdmin);
+    $('sheetSub').textContent = `Round ${state.round}`;
+    $('count2').textContent = count;
+    if (me.isAdmin) renderPlayers($('playerList2'), me);
+
+    if (inRound) {
+      $('num').textContent = me.number;
+      $('scaleDot').style.left = ((me.number - 1) / 99) * 100 + '%';
+      $('roundTag').textContent = 'ROUND ' + state.round;
+      const back = $('back');
+      back.style.background = me.color.hex;
+      back.style.color = isLight(me.color.hex) ? '#1b1b1f' : '#fff';
+      $('cname').textContent = me.color.name;
+      $('pname').textContent = me.name;
+    }
+
+    if (lastRound !== state.round) {
+      // New deal: always start on the number side.
+      if (lastRound !== null && inRound) flash(`Round ${state.round}`);
+      lastRound = state.round;
+      flipped = false;
+      $('card').classList.remove('flipped');
+      requestWake();
+    }
+  }
+
+  function flash(text) {
+    const d = document.createElement('div'); d.className = 'flash'; d.textContent = text;
+    document.body.append(d); setTimeout(() => d.remove(), 1300);
+    if (navigator.vibrate) navigator.vibrate(80);
+  }
+
+  // ---- events ----
+  $('joinForm').onsubmit = (e) => {
+    e.preventDefault();
+    const name = $('nameInput').value.trim();
+    if (!name) { $('joinErr').textContent = 'Enter your name'; return; }
+    try { localStorage.setItem('ito_name', name); } catch {}
+    joining = true; $('joinBtn').disabled = true; $('joinErr').textContent = '';
+    api('join', { name })
+      .catch((err) => { $('joinErr').textContent = (err && err.error) || 'Could not join. Check the connection.'; })
+      .finally(() => { joining = false; $('joinBtn').disabled = false; });
+  };
+  $('leaveBtn').onclick = () => { if (confirm('Leave the game?')) api('leave'); };
+  $('startBtn').onclick = () => api('start');
+  $('card').onclick = () => { flipped = !flipped; $('card').classList.toggle('flipped', flipped); requestWake(); };
+  $('gear').onclick = (e) => { e.stopPropagation(); $('sheetBg').classList.remove('hidden'); };
+  $('closeSheet').onclick = () => $('sheetBg').classList.add('hidden');
+  $('sheetBg').onclick = (e) => { if (e.target === $('sheetBg')) $('sheetBg').classList.add('hidden'); };
+  $('nextBtn').onclick = () => { $('sheetBg').classList.add('hidden'); api('next'); };
+  $('lobbyBtn').onclick = () => { if (confirm('End the round and go back to the lobby?')) { $('sheetBg').classList.add('hidden'); api('lobby'); } };
+})();
+</script>
+</body>
+</html>
