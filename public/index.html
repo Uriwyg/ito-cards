@@ -94,8 +94,6 @@
   .front .num { font-size: min(52vw, 38vh); font-weight: 900; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
   .front .corner { position: absolute; font-weight: 800; font-size: 26px; }
   .front .tl { top: 26px; left: 28px; } .front .br { bottom: 26px; right: 28px; transform: rotate(180deg); }
-  .front .scale { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); width: 60%; height: 6px; border-radius: 3px; background: #e6e0d2; }
-  .front .scale i { position: absolute; top: -5px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--card-ink); }
   .back { transform: rotateY(180deg); }
   .answer-field { order: 3; margin-top: 22px; width: 78%; padding: 12px 14px; font: inherit; font-size: 18px; text-align: center;
     color: var(--card-ink); background: #fff; border: 2px solid #e3dccb; border-radius: 14px; outline: none;
@@ -183,7 +181,6 @@
         <div class="hint" id="hintFront">Double-tap to hide behind your color</div>
         <input class="answer-field" id="answerInput" maxlength="60" placeholder="Your answer…" autocomplete="off" enterkeyhint="done">
         <div class="num" id="num">–</div>
-        <div class="scale"><i id="scaleDot"></i></div>
       </div>
       <div class="face back" id="back">
         <div class="answer-show" id="answerShow"></div>
@@ -379,7 +376,6 @@
 
     if (inRound) {
       $('num').textContent = me.number;
-      $('scaleDot').style.left = ((me.number - 1) / 99) * 100 + '%';
       $('roundTag').textContent = 'ROUND ' + state.round;
       const back = $('back');
       back.style.background = me.color.hex;
