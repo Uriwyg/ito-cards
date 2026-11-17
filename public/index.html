@@ -69,8 +69,8 @@
 
   .invite { margin-top: 28px; background: var(--panel); border-radius: 16px; padding: 16px; text-align: center; }
   .invite p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
-  #qr { display: inline-block; background: #fff; padding: 10px; border-radius: 10px; }
-  #qr:empty { display: none; }
+  #qr, .qr { display: inline-block; background: #fff; padding: 10px; border-radius: 10px; }
+  #qr:empty, .qr:empty { display: none; }
   .addr { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; margin-top: 10px; word-break: break-all; }
 
   /* ---------- the card ---------- */
@@ -97,7 +97,12 @@
   .front .scale { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); width: 60%; height: 6px; border-radius: 3px; background: #e6e0d2; }
   .front .scale i { position: absolute; top: -5px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--card-ink); }
   .back { transform: rotateY(180deg); }
-  .back .cname { font-size: 28px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; opacity: .55; }
+  .answer-field { order: 3; margin-top: 22px; width: 78%; padding: 12px 14px; font: inherit; font-size: 18px; text-align: center;
+    color: var(--card-ink); background: #fff; border: 2px solid #e3dccb; border-radius: 14px; outline: none;
+    user-select: text; -webkit-user-select: text; }
+  .answer-field:focus { border-color: var(--card-ink); }
+  .answer-show { max-width: 84%; font-size: clamp(24px, 8vw, 40px); font-weight: 800; line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
+  .answer-show:empty { display: none; }
   .back .pname { position: absolute; bottom: 30px; font-size: 18px; opacity: .55; }
   .hint { order: 2; margin-top: 18px; text-align: center; font-size: 14px; opacity: .5; pointer-events: none; }
   .front .hint { color: var(--card-ink); }
@@ -175,13 +180,14 @@
     <div class="card" id="card">
       <div class="face front">
         <div class="round-tag" id="roundTag"></div>
-        <div class="hint" id="hintFront">Tap to hide behind your color</div>
+        <div class="hint" id="hintFront">Double-tap to hide behind your color</div>
+        <input class="answer-field" id="answerInput" maxlength="60" placeholder="Your answer…" autocomplete="off" enterkeyhint="done">
         <div class="num" id="num">–</div>
         <div class="scale"><i id="scaleDot"></i></div>
       </div>
       <div class="face back" id="back">
-        <div class="hint">Tap to reveal</div>
-        <div class="cname" id="cname"></div>
+        <div class="answer-show" id="answerShow"></div>
+        <div class="hint">Double-tap to reveal</div>
         <div class="pname" id="pname"></div>
       </div>
     </div>
@@ -202,6 +208,11 @@
       placeholder="e.g. Vacation spots: 1 = worst, 100 = best"></textarea>
     <button class="btn primary" id="nextBtn">Next round (deal new numbers)</button>
     <button class="btn ghost" id="lobbyBtn">Back to lobby</button>
+    <div class="invite">
+      <p>Bring a player back (or add someone new):</p>
+      <div id="qr2" class="qr"></div>
+      <div class="addr" id="addr2"></div>
+    </div>
     <div class="section-title" style="margin-top:20px"><span>Players</span><span id="count2"></span></div>
     <ul class="players" id="playerList2"></ul>
     <button class="btn ghost" id="closeSheet">Close</button>
@@ -236,9 +247,26 @@
   let es = null;
   let lastRound = null;
   let flipped = false;
-  let qrFor = null;
+  const qrFor = new Map(); // QR box -> the link it currently shows
+
+  // The link players open to join; on the host's own computer, use the Wi-Fi address instead of localhost.
+  function joinUrl() {
+    const local = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    return local ? (state.addresses && state.addresses[0]) || location.origin : location.origin;
+  }
+
+  function showInvite(qrBox, addrBox) {
+    const url = joinUrl();
+    addrBox.textContent = url;
+    if (qrFor.get(qrBox) !== url && window.QRCode) {
+      qrBox.textContent = '';
+      new QRCode(qrBox, { text: url, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+      qrFor.set(qrBox, url);
+    }
+  }
   let joining = false;
   let promptTimer = null;
+  let answerTimer = null;
 
   const api = (action, body = {}) =>
     fetch('/api/' + action, {
@@ -332,14 +360,7 @@
       $('waitMsg').classList.toggle('hidden', me.isAdmin);
       $('startBtn').disabled = state.players.length < 1;
 
-      const url = (state.addresses && state.addresses[0]) || location.origin;
-      const joinUrl = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ? url : location.origin;
-      $('addr').textContent = joinUrl;
-      if (qrFor !== joinUrl && window.QRCode) {
-        $('qr').textContent = '';
-        new QRCode($('qr'), { text: joinUrl, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
-        qrFor = joinUrl;
-      }
+      showInvite($('qr'), $('addr'));
       return;
     }
 
@@ -363,8 +384,12 @@
       const back = $('back');
       back.style.background = me.color.hex;
       back.style.color = isLight(me.color.hex) ? '#1b1b1f' : '#fff';
-      $('cname').textContent = me.color.name;
       $('pname').textContent = me.name;
+      // Don't overwrite what the player is typing.
+      if (document.activeElement !== $('answerInput') && !answerTimer) {
+        $('answerInput').value = me.answer || '';
+        $('answerShow').textContent = me.answer || '';
+      }
     }
 
     if (lastRound !== state.round) {
@@ -434,8 +459,31 @@
   $('meSwatch').onclick = () => { $('colorErr').textContent = ''; renderPalette(); $('colorBg').classList.remove('hidden'); };
   $('closeColor').onclick = () => $('colorBg').classList.add('hidden');
   $('colorBg').onclick = (e) => { if (e.target === $('colorBg')) $('colorBg').classList.add('hidden'); };
-  $('card').onclick = () => { flipped = !flipped; $('card').classList.toggle('flipped', flipped); requestWake(); };
-  $('gear').onclick = (e) => { e.stopPropagation(); $('promptInput2').value = state.prompt || ''; $('sheetBg').classList.remove('hidden'); };
+  // Double-tap flips the card, so a stray touch on the table doesn't reveal the number.
+  let lastTap = 0;
+  $('card').onclick = (e) => {
+    if (e.target.closest('.answer-field')) return; // typing an answer is not a flip
+    const now = Date.now();
+    if (now - lastTap < 400) {
+      lastTap = 0;
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      flipped = !flipped;
+      $('card').classList.toggle('flipped', flipped);
+      requestWake();
+    } else {
+      lastTap = now;
+    }
+  };
+
+  // Answer: saved to the server shortly after typing, so a reload or sleeping phone keeps it.
+  $('answerInput').onclick = (e) => e.stopPropagation();
+  $('answerInput').oninput = () => {
+    $('answerShow').textContent = $('answerInput').value.trim();
+    clearTimeout(answerTimer);
+    answerTimer = setTimeout(() => { answerTimer = null; api('answer', { answer: $('answerInput').value }); }, 400);
+  };
+  $('answerInput').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); $('answerInput').blur(); } };
+  $('gear').onclick = (e) => { e.stopPropagation(); $('promptInput2').value = state.prompt || ''; showInvite($('qr2'), $('addr2')); $('sheetBg').classList.remove('hidden'); };
   $('closeSheet').onclick = () => $('sheetBg').classList.add('hidden');
   $('sheetBg').onclick = (e) => { if (e.target === $('sheetBg')) $('sheetBg').classList.add('hidden'); };
   $('nextBtn').onclick = () => { $('sheetBg').classList.add('hidden'); api('next', { prompt: $('promptInput2').value }); };

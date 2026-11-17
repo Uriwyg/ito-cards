@@ -65,7 +65,10 @@ function deal() {
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
   let k = 0;
-  for (const p of state.players.values()) p.number = pool[k++];
+  for (const p of state.players.values()) {
+    p.number = pool[k++];
+    p.answer = '';
+  }
   state.phase = 'playing';
   state.round += 1;
 }
@@ -89,6 +92,7 @@ function viewFor(id) {
       name: me.name,
       color: me.color,
       number: state.phase === 'playing' ? me.number : null, // only your own number is ever sent
+      answer: me.answer || '',
       isAdmin: state.adminId === me.id,
     },
     players: [...state.players.values()]
@@ -188,6 +192,12 @@ const server = http.createServer(async (req, res) => {
         if (taken) return json(res, 409, { error: 'That color was just taken' });
         me.color = color;
         break;
+      }
+      case 'answer': {
+        const me = state.players.get(id);
+        if (!me) return json(res, 400, { error: 'Not in the game' });
+        me.answer = String(body.answer || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+        return json(res, 200, { ok: true }); // only this player's view changes; no need to broadcast
       }
       case 'leave':
         state.players.delete(id);
